@@ -1,0 +1,16 @@
+# Expressions at a job's reusable workflow call by "uses:" are not evaluated.
+# The official documentation says "You cannot use contexts or expressions in this keyword."
+on: push
+jobs:
+  # ERROR: expression references a context so it is reported as not evaluated
+  with-context:
+    uses: ${{ github.repository }}/.github/workflows/reusable.yml@main
+  # OK: plain specification
+  plain:
+    uses: owner/repo/.github/workflows/reusable.yml@v1
+  # OK: pure literal expression does not depend on evaluation
+  literal:
+    uses: ${{ './.github/workflows/reusable.yml' }}
+  # ERROR: syntax error is reported as usual and the unevaluated diagnostic is suppressed
+  syntax-error:
+    uses: ${{ 1 + }}

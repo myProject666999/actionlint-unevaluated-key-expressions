@@ -1,0 +1,29 @@
+# "unevaluated-expressions.tentative: true" is set in actionlint.yaml of this project.
+# The keys below are classified as "tentative": the official documentation does not state
+# whether expressions are evaluated, and they are not listed in the context availability table.
+name: CI ${{ github.workflow }}
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      level:
+        # ERROR: expression in a workflow_dispatch input description
+        description: ${{ github.actor }} chooses the level
+        type: string
+      no-expr:
+        # OK: no expression (control case)
+        description: plain description
+        type: string
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+        # ERROR: expression in a step shell
+        shell: ${{ env.SHELL }}
+      - run: echo bye
+        # OK: no expression (control case)
+        shell: bash
+      - run: echo id
+        # ERROR: expression in a step id
+        id: ${{ github.job }}

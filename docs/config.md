@@ -28,6 +28,14 @@ config-variables:
   - JOB_NAME
   - ENVIRONMENT_STAGE
 
+# Configuration for the diagnostic which reports ${{ }} expressions at workflow keys whose
+# expression support is not confirmed by the official documentation.
+unevaluated-expressions:
+  # Report expressions at workflow keys classified as "tentative". Such keys are not listed in the
+  # context availability table and the official documentation does not state whether expressions are
+  # evaluated. Since the classification may be wrong, this diagnostic is disabled by default.
+  tentative: false
+
 # Path-specific configurations.
 paths:
   # Glob pattern relative to the repository root for matching files. The path separator is always '/'.
@@ -49,6 +57,11 @@ paths:
     is available.
 - `config-variables`: [Configuration variables][vars]. When an array is set, actionlint will check `vars` properties strictly.
   An empty array means no variable is allowed. The default value `null` disables the check.
+- `unevaluated-expressions`: Configuration for the diagnostic which reports `${{ }}` expressions at workflow keys whose
+  expression support is not confirmed by the official documentation. See [the `unevaluated` diagnostic](checks.md#ctx-spfunc-availability)
+  for the background.
+  - `tentative`: When `true`, actionlint also reports the `unevaluated` diagnostic at workflow keys classified as "tentative"
+    (e.g. a step's `shell:` or a workflow's `name:`). It is disabled by default because the classification may be wrong.
 - `paths`: Configurations for specific file path patterns. This is a mapping from a glob pattern and the corresponding
   configuration.
   - `{glob}`: A file path glob pattern to apply the configuration. The path separator is always '/'. It is matched to the

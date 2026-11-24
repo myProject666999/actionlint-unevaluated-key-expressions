@@ -67,6 +67,15 @@ type Config struct {
 	// Paths is a "paths" mapping in the configuration file. The keys are glob patterns to match file paths.
 	// And the values are corresponding configurations applied to the file paths.
 	Paths map[string]PathConfig `yaml:"paths"`
+	// UnevaluatedExpressions is configuration for the diagnostic which reports ${{ }} expressions at
+	// workflow keys whose expression support is not confirmed by the official documentation.
+	UnevaluatedExpressions struct {
+		// Tentative enables the diagnostic for workflow keys classified as "tentative". Such keys are
+		// not listed in the context availability table and the official documentation does not state
+		// whether expressions are evaluated. Since this classification may be wrong and cause false
+		// positives, the diagnostic is disabled by default.
+		Tentative bool `yaml:"tentative"`
+	} `yaml:"unevaluated-expressions"`
 }
 
 // PathConfigs returns a list of all PathConfig values matching to the given file path. The path must
@@ -142,6 +151,15 @@ func writeDefaultConfigFile(path string) error {
 # organization. ` + "`null`" + ` means disabling configuration variables check.
 # Empty array means no configuration variable is allowed.
 config-variables: null
+
+# Configuration for the diagnostic which reports ${{ }} expressions at workflow
+# keys whose expression support is not confirmed by the official documentation.
+unevaluated-expressions:
+  # Report expressions at workflow keys classified as "tentative". Such keys are
+  # not listed in the context availability table and the official documentation does
+  # not state whether expressions are evaluated. Since the classification may be
+  # wrong, this diagnostic is disabled by default.
+  tentative: false
 
 # Configuration for file paths. The keys are glob patterns to match to file
 # paths relative to the repository root. The values are the configurations for

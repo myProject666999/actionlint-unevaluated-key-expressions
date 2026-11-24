@@ -373,6 +373,8 @@ type ExprSemanticsChecker struct {
 	untrusted             *UntrustedInputChecker
 	availableContexts     []string
 	availableSpecialFuncs []string
+	anyContext            bool
+	anySpecialFunc        bool
 	configVars            []string
 }
 
@@ -521,6 +523,10 @@ func (sema *ExprSemanticsChecker) SetContextAvailability(avail []string) {
 }
 
 func (sema *ExprSemanticsChecker) checkAvailableContext(n *VariableNode) {
+	if sema.anyContext {
+		return // Any context is allowed at this position
+	}
+
 	ctx := strings.ToLower(n.Name)
 	for _, c := range sema.availableContexts {
 		if c == ctx {
@@ -561,6 +567,10 @@ func (sema *ExprSemanticsChecker) SetSpecialFunctionAvailability(avail []string)
 }
 
 func (sema *ExprSemanticsChecker) checkSpecialFunctionAvailability(n *FuncCallNode) {
+	if sema.anySpecialFunc {
+		return // Any special function is allowed at this position
+	}
+
 	f := strings.ToLower(n.Callee)
 
 	allowed, ok := SpecialFunctionNames[f]
@@ -581,6 +591,20 @@ func (sema *ExprSemanticsChecker) checkSpecialFunctionAvailability(n *FuncCallNo
 		n.Callee,
 		quotes(allowed),
 	)
+}
+
+// AllowAnyContext makes ExprSemanticsChecker consider any context is available while checks. This
+// is used for positions where the platform does not restrict available contexts, or where
+// expressions are not evaluated at all so reporting unavailable contexts would be misleading. It
+// has a higher priority than SetContextAvailability.
+func (sema *ExprSemanticsChecker) AllowAnyContext() {
+	sema.anyContext = true
+}
+
+// AllowAnySpecialFunction makes ExprSemanticsChecker consider any special function is available
+// while checks. It has a higher priority than SetSpecialFunctionAvailability.
+func (sema *ExprSemanticsChecker) AllowAnySpecialFunction() {
+	sema.anySpecialFunc = true
 }
 
 func (sema *ExprSemanticsChecker) visitUntrustedCheckerOnEnterNode(n ExprNode) {

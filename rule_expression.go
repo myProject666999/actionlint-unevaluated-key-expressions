@@ -53,31 +53,31 @@ func NewRuleExpression(actionsCache *LocalActionsCache, workflowCache *LocalReus
 
 // VisitWorkflowPre is callback when visiting Workflow node before visiting its children.
 func (rule *RuleExpression) VisitWorkflowPre(n *Workflow) error {
-	rule.checkString(n.Name, "")
+	rule.checkWorkflowKeyString(n.Name, "name")
 
 	for _, e := range n.On {
 		switch e := e.(type) {
 		case *WebhookEvent:
-			rule.checkStrings(e.Types, "")
+			rule.checkWorkflowKeyStrings(e.Types, "on.<event_name>.types")
 			rule.checkWebhookEventFilter(e.Branches)
 			rule.checkWebhookEventFilter(e.BranchesIgnore)
 			rule.checkWebhookEventFilter(e.Tags)
 			rule.checkWebhookEventFilter(e.TagsIgnore)
 			rule.checkWebhookEventFilter(e.Paths)
 			rule.checkWebhookEventFilter(e.PathsIgnore)
-			rule.checkStrings(e.Workflows, "")
+			rule.checkWorkflowKeyStrings(e.Workflows, "on.workflow_run.workflows")
 		case *ScheduledEvent:
 			for _, s := range e.Schedules {
-				rule.checkString(s.Cron, "")
-				rule.checkString(s.Timezone, "")
+				rule.checkWorkflowKeyString(s.Cron, "on.schedule.cron")
+				rule.checkWorkflowKeyString(s.Timezone, "on.schedule.timezone")
 			}
 		case *WorkflowDispatchEvent:
 			ity := NewEmptyStrictObjectType()
 			for id, i := range e.Inputs {
-				rule.checkString(i.Description, "")
-				rule.checkString(i.Default, "")
+				rule.checkWorkflowKeyString(i.Description, "on.workflow_dispatch.inputs.<input_id>.description")
+				rule.checkWorkflowKeyString(i.Default, "on.workflow_dispatch.inputs.<input_id>.default")
 				rule.checkBool(i.Required, "")
-				rule.checkStrings(i.Options, "")
+				rule.checkWorkflowKeyStrings(i.Options, "on.workflow_dispatch.inputs.<input_id>.options")
 
 				var ty ExprType
 				switch i.Type {
@@ -94,7 +94,7 @@ func (rule *RuleExpression) VisitWorkflowPre(n *Workflow) error {
 			}
 			rule.dispatchInputsTy = ity
 		case *RepositoryDispatchEvent:
-			rule.checkStrings(e.Types, "")
+			rule.checkWorkflowKeyStrings(e.Types, "on.repository_dispatch.types")
 		case *WorkflowCallEvent:
 			ity := NewEmptyStrictObjectType()
 
@@ -108,7 +108,7 @@ func (rule *RuleExpression) VisitWorkflowPre(n *Workflow) error {
 			rule.inputsTy = ity
 
 			for _, i := range e.Inputs {
-				rule.checkString(i.Description, "")
+				rule.checkWorkflowKeyString(i.Description, "on.workflow_call.inputs.<input_id>.description")
 				// Check default value before setting type to `ity` because referring myself should cause an error.
 				//   inputs:
 				//     recursive:
@@ -153,7 +153,7 @@ func (rule *RuleExpression) VisitWorkflowPre(n *Workflow) error {
 				sty := NewEmptyStrictObjectType()
 				for id, s := range e.Secrets {
 					sty.Props[id] = StringType{}
-					rule.checkString(s.Description, "")
+					rule.checkWorkflowKeyString(s.Description, "on.workflow_call.secrets.<secret_id>.description")
 				}
 				rule.secretsTy = sty
 			}
@@ -207,7 +207,7 @@ func (rule *RuleExpression) VisitJobPre(n *Job) error {
 	}
 
 	rule.checkString(n.Name, "jobs.<job_id>.name")
-	rule.checkStrings(n.Needs, "")
+	rule.checkWorkflowKeyStrings(n.Needs, "jobs.<job_id>.needs")
 
 	if n.RunsOn != nil {
 		if n.RunsOn.LabelsExpr != nil {
@@ -287,10 +287,10 @@ func (rule *RuleExpression) VisitStep(n *Step) error {
 	switch e := n.Exec.(type) {
 	case *ExecRun:
 		rule.checkScriptString(e.Run, "jobs.<job_id>.steps.run")
-		rule.checkString(e.Shell, "")
+		rule.checkWorkflowKeyString(e.Shell, "jobs.<job_id>.steps.shell")
 		rule.checkString(e.WorkingDirectory, "jobs.<job_id>.steps.working-directory")
 	case *ExecAction:
-		rule.checkString(e.Uses, "")
+		rule.checkWorkflowKeyString(e.Uses, "jobs.<job_id>.steps.uses")
 		for n, i := range e.Inputs {
 			if e.Uses != nil && strings.HasPrefix(e.Uses.Value, "actions/github-script@") && n == "script" {
 				rule.checkScriptString(i.Value, "jobs.<job_id>.steps.with")
@@ -309,7 +309,7 @@ func (rule *RuleExpression) VisitStep(n *Step) error {
 
 	if n.ID != nil {
 		if n.ID.ContainsExpression() {
-			rule.checkString(n.ID, "")
+			rule.checkWorkflowKeyString(n.ID, "jobs.<job_id>.steps.id")
 			rule.stepsTy.Loose()
 		}
 		// Step ID is case insensitive
@@ -526,7 +526,7 @@ func (rule *RuleExpression) checkWorkflowCall(c *WorkflowCall) {
 		return
 	}
 
-	rule.checkString(c.Uses, "")
+	rule.checkWorkflowKeyString(c.Uses, "jobs.<job_id>.uses")
 
 	m, err := rule.localWorkflows.FindMetadata(c.Uses.Value)
 	if err != nil {
@@ -597,7 +597,7 @@ func (rule *RuleExpression) checkWebhookEventFilter(f *WebhookEventFilter) {
 	if f == nil {
 		return
 	}
-	rule.checkStrings(f.Values, "")
+	rule.checkWorkflowKeyStrings(f.Values, "on.<event>.<filter>")
 }
 
 func (rule *RuleExpression) checkStrings(ss []*String, workflowKey string) {
@@ -684,6 +684,143 @@ func (rule *RuleExpression) checkString(str *String, workflowKey string) []typed
 
 	rule.checkTemplateEvaluatedType(ts)
 	return ts
+}
+
+// tentativeEnabled returns whether the diagnostic for workflow keys classified as "tentative" is
+// enabled through the configuration.
+func (rule *RuleExpression) tentativeEnabled() bool {
+	return rule.config != nil && rule.config.UnevaluatedExpressions.Tentative
+}
+
+// checkWorkflowKeyString is checkString for a workflow key which may have a handwritten expression
+// policy. When the key is classified as "not evaluated" (always) or "tentative" (only when enabled
+// through the configuration), it reports the dedicated diagnostic and skips the misleading context
+// availability check while still checking the expression syntax and types. Otherwise it behaves like
+// checkString.
+func (rule *RuleExpression) checkWorkflowKeyString(str *String, workflowKey string) []typedExpr {
+	if str == nil {
+		return nil
+	}
+
+	if rule.unevaluatedEnabled(workflowKey) {
+		rule.checkUnevaluatedExpressions(str, workflowKey)
+		return nil
+	}
+
+	return rule.checkString(str, workflowKey)
+}
+
+func (rule *RuleExpression) checkWorkflowKeyStrings(ss []*String, workflowKey string) {
+	for _, s := range ss {
+		rule.checkWorkflowKeyString(s, workflowKey)
+	}
+}
+
+// unevaluatedEnabled returns whether the "not evaluated" diagnostic should be reported for the given
+// workflow key.
+func (rule *RuleExpression) unevaluatedEnabled(workflowKey string) bool {
+	policy, _, _, ok := WorkflowKeyExpressionPolicy(workflowKey)
+	if !ok {
+		return false
+	}
+	switch policy {
+	case WorkflowKeyNotEvaluated:
+		return true
+	case WorkflowKeyTentative:
+		return rule.tentativeEnabled()
+	case WorkflowKeyAnyContext:
+		return false
+	default:
+		return false
+	}
+}
+
+// checkUnevaluatedExpressions checks the expressions at a workflow key where expressions are not
+// evaluated (or may not be evaluated). Unlike checkExprsIn, it does not abort on the first error so
+// that every ${{ }} placeholder is checked independently. Syntax errors are reported as usual. When
+// at least one syntax-valid expression references a context or a function, it reports a single
+// "not evaluated" diagnostic at the first such expression so that the source is not spammed.
+func (rule *RuleExpression) checkUnevaluatedExpressions(str *String, workflowKey string) {
+	_, _, docURL, _ := WorkflowKeyExpressionPolicy(workflowKey)
+
+	s := str.Value
+	line, col := str.Pos.Line, str.Pos.Col
+	if str.Quoted {
+		col++ // when the string is quoted like 'foo' or "foo", column should be incremented
+	}
+	offset := 0
+	var first *Pos
+	for {
+		idx := strings.Index(s, "${{")
+		if idx == -1 {
+			break
+		}
+
+		start := idx + 3 // 3 means removing "${{"
+		s = s[start:]
+		offset += start
+		c := col + offset // column of the first token after "${{"
+		pos := Pos{line, c - 3}
+
+		l := NewExprLexer(s)
+		p := NewExprParser()
+		expr, err := p.Parse(l)
+		if err != nil {
+			// Report the syntax error and skip this expression. Other expressions are still checked.
+			rule.exprError(err, line, c)
+			after := l.Offset()
+			if after <= 0 {
+				break // cannot advance; avoid an infinite loop
+			}
+			s = s[after:]
+			offset += after
+			continue
+		}
+
+		// Syntax is valid. Run the semantics check (type checks) with any context allowed so that no
+		// misleading context availability error is reported. The template type check mirrors checkString.
+		ty, ok := rule.checkSemanticsOfExprNode(expr, line, c, false, workflowKey)
+		if ok && ty != nil {
+			rule.checkTemplateEvaluatedType([]typedExpr{{ty, pos}})
+		}
+		if first == nil && hasContextOrFunction(expr) {
+			first = &pos
+		}
+
+		after := l.Offset()
+		if after <= 0 {
+			break // cannot advance; avoid an infinite loop
+		}
+		s = s[after:]
+		offset += after
+	}
+
+	if first != nil {
+		rule.errs = append(rule.errs, errorfAt(
+			first,
+			"unevaluated",
+			"expression at %q is not evaluated. this position does not support expressions, so the value is used literally or rejected by the platform. see %s for more details",
+			workflowKey,
+			docURL,
+		))
+	}
+}
+
+// hasContextOrFunction returns whether the expression references a context (a variable) or a
+// function call. A pure literal such as ${{ 'foo' }} does not depend on the evaluation, so it is not
+// reported as "not evaluated".
+func hasContextOrFunction(expr ExprNode) bool {
+	found := false
+	VisitExprNode(expr, func(n, _ ExprNode, entering bool) {
+		if !entering {
+			return
+		}
+		switch n.(type) {
+		case *VariableNode, *FuncCallNode:
+			found = true
+		}
+	})
+	return found
 }
 
 func (rule *RuleExpression) checkScriptString(str *String, workflowKey string) {
@@ -799,7 +936,30 @@ func (rule *RuleExpression) checkSemanticsOfExprNode(expr ExprNode, line, col in
 	if rule.jobsTy != nil {
 		c.UpdateJobs(rule.jobsTy)
 	}
-	if workflowKey != "" {
+	if policy, _, _, ok := WorkflowKeyExpressionPolicy(workflowKey); ok {
+		switch policy {
+		case WorkflowKeyAnyContext, WorkflowKeyNotEvaluated:
+			// The platform does not restrict available contexts here. For WorkflowKeyNotEvaluated,
+			// the expression is not evaluated at all, so reporting unavailable contexts would be
+			// misleading. Genuine type errors are still reported.
+			c.AllowAnyContext()
+			c.AllowAnySpecialFunction()
+		case WorkflowKeyTentative:
+			if rule.tentativeEnabled() {
+				c.AllowAnyContext()
+				c.AllowAnySpecialFunction()
+			} else {
+				// Unconfirmed position. Keep the existing behavior (deny all contexts) and note it in
+				// the debug log so that it can be investigated.
+				ctx, sp := WorkflowKeyAvailability(workflowKey)
+				if len(ctx) == 0 {
+					rule.Debug("No context availability was found for workflow key %q", workflowKey)
+				}
+				c.SetContextAvailability(ctx)
+				c.SetSpecialFunctionAvailability(sp)
+			}
+		}
+	} else if workflowKey != "" {
 		ctx, sp := WorkflowKeyAvailability(workflowKey)
 		if len(ctx) == 0 {
 			rule.Debug("No context availability was found for workflow key %q", workflowKey)

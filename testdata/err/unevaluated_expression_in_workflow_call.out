@@ -1,0 +1,2 @@
+test.yaml:7:11: expression at "jobs.<job_id>.uses" is not evaluated. this position does not support expressions, so the value is used literally or rejected by the platform. see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_iduses for more details [unevaluated]
+test.yaml:16:17: got unexpected character '+' while lexing expression, expecting 'a'..'z', 'A'..'Z', '_', '0'..'9', ''', '}', '(', ')', '[', ']', '.', '!', '<', '>', '=', '&', '|', '*', ',', ' ' [expression]

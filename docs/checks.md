@@ -2731,6 +2731,35 @@ keys.
 actionlint checks if these contexts and special functions are used correctly. It reports an error when it finds that some context
 or special function is not available in your workflow.
 
+### Positions without context availability
+
+Some workflow keys are not listed in the context availability table of the official document. For such keys actionlint cannot
+know which contexts and special functions are allowed, and whether the platform evaluates `${{ }}` at all. actionlint classifies
+each such key into one of the following three categories, recorded in a handwritten table (not in the generated availability
+data). The table also records the rationale and the link to the official document for each key so that the classification can be
+reviewed later.
+
+- **Not evaluated**: The official documentation explicitly states that expressions cannot be used at the key. A `${{ }}`
+  placeholder is treated as a literal string or rejected by the platform, so it is never evaluated. actionlint reports the
+  dedicated `unevaluated` diagnostic for an expression that references a context or a function (a pure literal such as
+  `${{ 'foo' }}` is not reported since it does not depend on evaluation). For example, `jobs.<job_id>.uses` (a reusable workflow
+  call) falls into this category: the official document says *"You cannot use contexts or expressions in this keyword."* This
+  diagnostic is enabled by default.
+- **Tentative**: It is not confirmed by the official documentation whether expressions are evaluated at the key, and the key is
+  not listed in the context availability table. Because the classification may be wrong and cause a false positive, actionlint
+  keeps the current behavior by default and does not report the `unevaluated` diagnostic. It can be enabled with the
+  `unevaluated-expressions.tentative` configuration (see [the configuration document](config.md)). Note that by default such
+  positions still report that every context is unavailable, which may be misleading.
+- **Any context**: Expressions at the key are evaluated with any context available. No dedicated diagnostic is reported. No key
+  falls into this category at the time of writing.
+
+The `unevaluated` diagnostic uses its own rule kind, so you can suppress only this class of errors with `-ignore` or the `ignore`
+configuration. The diagnostic points to the starting position of the `${{ }}` placeholder, the same position convention as other
+expression diagnostics. When a single value contains multiple `${{ }}` placeholders, at most one `unevaluated` diagnostic is
+reported (at the first syntax-valid expression that references a context or a function), while syntax errors are reported for
+every placeholder individually.
+
+
 <a id="#check-deprecated-workflow-commands"></a>
 ## Check deprecated workflow commands
 

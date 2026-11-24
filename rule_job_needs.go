@@ -57,6 +57,11 @@ func contains[T comparable](heystack []T, needle T) bool {
 func (rule *RuleJobNeeds) VisitJobPre(n *Job) error {
 	needs := make([]string, 0, len(n.Needs))
 	for _, j := range n.Needs {
+		// A job ID containing an expression is not a real job ID. The expression is checked by the
+		// "expression" rule, so skip it here to avoid a contradictory "does not exist" error.
+		if j.ContainsExpression() {
+			continue
+		}
 		id := strings.ToLower(j.Value)
 		if contains(needs, id) {
 			rule.Errorf(j.Pos, "job ID %q duplicates in \"needs\" section. note that job ID is case insensitive", j.Value)
